@@ -1,7 +1,6 @@
 // Note: this requires the `derive` feature
 
 use clap::{AppSettings, Parser, Subcommand};
-use reqwest::header::CONTENT_TYPE;
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use std::io::{stdin, Write};
@@ -58,7 +57,7 @@ fn main() {
             println!("concat Message: {:?}", body);
 
             let note_types = get_note_types(&config.url).unwrap();
-            // let note_mods = get_note_mods(&config.url).unwrap();
+            let note_mods = get_note_mods(&config.url).unwrap();
             let collections = get_collections(&config.url).unwrap();
             let defaults = get_defaults(&config.url).unwrap();
 
@@ -75,11 +74,14 @@ fn main() {
             let final_collection_id = get_final_collection_id(&collection, &collections);
             println!("final_collection_id: {:?}", final_collection_id);
 
+            
+            let collected_mods = collect_mods(&message);
+
             let post_body: NotePostBody = NotePostBody {
                 noteType: final_note_type,
                 collectionId: final_collection_id,
                 body: body,
-                modifiers: [].to_vec(),
+                modifiers: collected_mods,
             };
 
             let client = reqwest::blocking::Client::new();
@@ -112,11 +114,11 @@ fn main() {
             println!("Note Types:");
             note_types.iter().for_each(|nt| println!("\t{:?}", nt.name));
             println!("Note Mods:");
-            note_mods.iter().for_each(|nm| println!("\t{:?}", nm));
-            println!("Collections:");
-            collections
+            note_mods
                 .iter()
-                .for_each(|c| println!("\t{:?}", c.name));
+                .for_each(|nm| println!("\t{:?} - {:?}", nm.char, nm.name));
+            println!("Collections:");
+            collections.iter().for_each(|c| println!("\t{:?}", c.name));
             println!("Defaults:");
             println!("\tdefaultNoteType: {:?}", defaults.defaultNoteType);
             println!("\tdefaultCollection: {:?}", defaults.defaultCollection);
@@ -164,6 +166,18 @@ fn main() {
     }
 }
 
+fn collect_mods(body: &Vec<String>) -> Vec<String> {
+    let mut mods = vec![];
+    for line in body {
+        if line.len() == 1 {
+            mods.push(line.to_string());
+        } else {
+            break;
+        }
+    }
+    mods
+}
+
 fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(get_config_file().unwrap())
         .expect("Something went wrong reading the file");
@@ -182,26 +196,15 @@ fn get_config_file() -> Result<String, Box<dyn std::error::Error>> {
     Ok(config_file)
 }
 
-fn vec_contains(v: &Vec<String>, e: &String) -> Vec<String> {
-    v.iter()
-        .filter(|x| {
-            x.to_ascii_lowercase()
-                .contains(e.to_ascii_lowercase().as_str())
-        })
-        .map(|x| x.to_string())
-        .collect::<Vec<String>>()
-}
-
 fn get_final_note_type(note_type: &String, note_types: &Vec<NoteType>) -> String {
     let final_note_type = &note_types
-    .iter()
-    .filter(|x| {
-        x.name
-            .to_ascii_lowercase()
-            .contains(note_type.to_ascii_lowercase().as_str())
-    })
-    .collect::<Vec<&NoteType>>();
-    
+        .iter()
+        .filter(|x| {
+            x.name
+                .to_ascii_lowercase()
+                .contains(note_type.to_ascii_lowercase().as_str())
+        })
+        .collect::<Vec<&NoteType>>();
     match final_note_type.len() {
         1 => {
             return final_note_type[0].id.to_string();
@@ -238,7 +241,7 @@ fn get_note_types(url: &String) -> Result<Vec<NoteType>, Box<dyn std::error::Err
     Ok(res.types)
 }
 
-fn get_note_mods(url: &String) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+fn get_note_mods(url: &String) -> Result<Vec<NoteMod>, Box<dyn std::error::Error>> {
     let resp = reqwest::blocking::get(format!("{}{}", url, "api/note-mods"))?;
     let res = resp.json::<NoteModsResponse>().unwrap();
 
@@ -266,7 +269,7 @@ struct NoteTypeResponse {
 
 #[derive(Deserialize, Debug)]
 struct NoteModsResponse {
-    mods: Vec<String>,
+    mods: Vec<NoteMod>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -274,10 +277,12 @@ struct CollectionsResponse {
     collections: Vec<Collection>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 struct Collection {
     id: String,
     name: String,
+    otherDateRequired: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -286,6 +291,14 @@ struct NoteType {
     name: String,
 }
 
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug)]
+struct NoteMod {
+    name: String,
+    char: String,
+}
+
+#[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 struct Defaults {
     defaultCollection: String,
@@ -297,6 +310,7 @@ struct Config {
     url: String,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize)]
 struct NotePostBody {
     body: String,

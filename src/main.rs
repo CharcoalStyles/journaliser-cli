@@ -17,26 +17,26 @@ enum Commands {
     #[clap(about = "Add a note")]
     Note {
         /// Note Type, if supplied will be checked against available types
-        #[clap(short = 'n')]
+        #[clap(short = 'n', help = "Optional, Set the note type")]
         note_type: Option<String>,
 
         /// Collection, if supplied will be checked against available collections
-        #[clap(short = 'c')]
+        #[clap(short = 'c', help = "Optional, Set the collection")]
         collection: Option<String>,
 
         /// The actual body of the note
-        #[clap()]
+        #[clap(help = "The actual note body")]
         message: Vec<String>,
     },
     #[clap(about = "List the available Note Types, Note Mods, Collections, and the Defaults")]
     Data {
-        #[clap(short, long)]
+        #[clap(short, long, help = "To add a new note")]
         add: bool,
 
-        #[clap(short = 't', long)]
+        #[clap(short = 't', long, help = "What type of new data to add")]
         data_type: Option<String>,
 
-        #[clap()]
+        #[clap(help = "The new type name")]
         value: Option<String>,
     },
     #[clap(about = "View or update the configuration")]

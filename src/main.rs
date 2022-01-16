@@ -29,7 +29,16 @@ enum Commands {
         message: Vec<String>,
     },
     #[clap(about = "List the available Note Types, Note Mods, Collections, and the Defaults")]
-    Types {},
+    Data {
+        #[clap(short, long)]
+        add: bool,
+
+        #[clap(short = 't', long)]
+        data_type: Option<String>,
+
+        #[clap()]
+        value: Option<String>,
+    },
     #[clap(about = "View or update the configuration")]
     Config {
         /// Update the configuration
@@ -74,11 +83,10 @@ fn main() {
             let final_collection_id = get_final_collection_id(&collection, &collections);
             println!("final_collection_id: {:?}", final_collection_id);
 
-            
             let collected_mods = collect_mods(&message);
 
             let post_body: NotePostBody = NotePostBody {
-                noteType: final_note_type,
+                noteTypeId: final_note_type,
                 collectionId: final_collection_id,
                 body: body,
                 modifiers: collected_mods,
@@ -102,26 +110,85 @@ fn main() {
             }
             return;
         }
-        Commands::Types {} => {
+        Commands::Data {
+            add,
+            data_type,
+            value,
+        } => {
             let config = get_config().unwrap();
             let note_types = get_note_types(&config.url).unwrap();
             let note_mods = get_note_mods(&config.url).unwrap();
             let collections = get_collections(&config.url).unwrap();
             let defaults = get_defaults(&config.url).unwrap();
+            match add {
+                true => {
+                    println!("data_type: {:?}", data_type);
+                    println!("value: {:?}", value);
 
-            println!("Config:");
-            println!("\t{:#?}", config.url);
-            println!("Note Types:");
-            note_types.iter().for_each(|nt| println!("\t{:?}", nt.name));
-            println!("Note Mods:");
-            note_mods
-                .iter()
-                .for_each(|nm| println!("\t{:?} - {:?}", nm.char, nm.name));
-            println!("Collections:");
-            collections.iter().for_each(|c| println!("\t{:?}", c.name));
-            println!("Defaults:");
-            println!("\tdefaultNoteType: {:?}", defaults.defaultNoteType);
-            println!("\tdefaultCollection: {:?}", defaults.defaultCollection);
+                    let data_type = data_type.clone().unwrap_or("".to_string());
+
+                    match data_type.as_str() {
+                        "NoteType" => {
+                            let note_type = value.clone().unwrap();
+                            let post_body = NoteTypePostBody {
+                                noteTypeName: value.clone().unwrap(),
+                            };
+                            let final_note_type = get_final_note_type(&note_type, &note_types);
+                            match final_note_type.as_str() {
+                                "" => {
+                                    let client = reqwest::blocking::Client::new();
+                                    let res = client
+                                        .post(format!("{}{}", config.url, "api/note-type"))
+                                        .body(serde_json::to_string(&post_body).unwrap())
+                                        .send();
+
+                                    match res {
+                                        Ok(res) => {
+                                            println!("Status: {}", res.status());
+                                            println!("Body: {}", res.text().unwrap());
+                                        }
+                                        Err(e) => {
+                                            println!("Error: {}", e);
+                                        }
+                                    }
+                                    return;
+                                }
+                                _ => {
+                                    println!("Note type already exists");
+                                    return;
+                                }
+                            }
+                        }
+                        "NoteMod" => {
+                            println!("Not yet implemented");
+                            return;
+                        }
+                        "Collection" => {
+                            println!("Not yet implemented");
+                            return;
+                        }
+                        _ => {
+                            println!("Unknown data type: {:?}", data_type);
+                            return;
+                        }
+                    }
+                }
+                false => {
+                    println!("Config:");
+                    println!("\t{:#?}", config.url);
+                    println!("Note Types:");
+                    note_types.iter().for_each(|nt| println!("\t{:?}", nt.name));
+                    println!("Note Mods:");
+                    note_mods
+                        .iter()
+                        .for_each(|nm| println!("\t{:?} - {:?}", nm.char, nm.name));
+                    println!("Collections:");
+                    collections.iter().for_each(|c| println!("\t{:?}", c.name));
+                    println!("Defaults:");
+                    println!("\tdefaultNoteType: {:?}", defaults.defaultNoteType);
+                    println!("\tdefaultCollection: {:?}", defaults.defaultCollection);
+                }
+            }
         }
         Commands::Config { update } => match update {
             true => {
@@ -314,7 +381,13 @@ struct Config {
 #[derive(Debug, Serialize)]
 struct NotePostBody {
     body: String,
-    noteType: String,
+    noteTypeId: String,
     collectionId: String,
     modifiers: Vec<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize)]
+struct NoteTypePostBody {
+    noteTypeName: String,
 }
